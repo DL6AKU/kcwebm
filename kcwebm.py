@@ -36,7 +36,7 @@ FFMPEG_COMMANDS = {
 }
 
 FFMPEG_OPTIONS = {
-    "scale": "-filter:v scale=@SCALE@:-1",
+    "scale": "-filter:v scale=-1:@SCALE@",
     "rate_size": "-minrate @RATE@ -maxrate @RATE@ -b:v @RATE@",
     "rate_maxsize": "",
     "rate_bitrate": "-minrate @RATE@ -maxrate @RATE@ -b:v @RATE@",
