@@ -164,7 +164,7 @@ def main():
     parser.add_argument("-a", "--noaudio", action="store_true", help="Disable audio completely.")
     parser.add_argument("-1", "--onepass", action="store_true", help="Disable two-pass encoding.")
     parser.add_argument("-c", "--commandonly", action="store_true", help="Output ffmpeg commands only.")
-    parser.add_argument("--cfac", type=float, default="0.01", help="Correction factor to account for headers, containers, jitter. Must be between 0 and 0.3. Default is 0.01. Increase if videos get too large.")
+    parser.add_argument("--cfac", type=float, default="0.025", help="Correction factor to account for headers, containers, jitter. Must be between 0 and 0.3. Default is 0.025. Increase if videos get too large.")
 
     parser.add_argument("video", help="The video file to be converted.")
 
