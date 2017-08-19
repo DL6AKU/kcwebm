@@ -59,10 +59,6 @@ def calc_rate(args, video):
         raise RuntimeError("Invalid length.")
 
     available_bits = args.size * 1024 * 1024 * 8
-
-    # Correct for headers, container and jitter (5%)
-    if args.cfac > 0.30 or args.cfac < 0.01:
-        raise AttributeError("Valid --cfac values range from 0.01 to 0.30")
     available_bits -= available_bits * args.cfac
 
     audio_bits = 64 * 1024 * length
@@ -168,14 +164,18 @@ def main():
     parser.add_argument("-a", "--noaudio", action="store_true", help="Disable audio completely.")
     parser.add_argument("-1", "--onepass", action="store_true", help="Disable two-pass encoding.")
     parser.add_argument("-c", "--commandonly", action="store_true", help="Output ffmpeg commands only.")
-    parser.add_argument("--cfac", type=float, default="0.05", help="Correction factor to account for headers, containers, jitter. Default is 0.05. Increase if videos get too large.")
+    parser.add_argument("--cfac", type=float, default="0.01", help="Correction factor to account for headers, containers, jitter. Must be between 0 and 0.3. Default is 0.01. Increase if videos get too large.")
 
     parser.add_argument("video", help="The video file to be converted.")
 
     args = parser.parse_args()
 
+    # Check Arguments for sanity:
+    ## If bitrate mode is set, we only do one pass
     if args.bitrate:
         args.onepass = True
+    ## Make sure cfac is a sane value
+    assert 0 <= args.cfac <= 0.3
 
     if not os.path.exists(args.video):
         print("File {} does not exist.".format(os.path.abspath(args.video)))

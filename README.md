@@ -51,6 +51,6 @@ optional arguments:
   -1, --onepass         Disable two-pass encoding.
   -c, --commandonly     Output ffmpeg commands only.
   --cfac CFAC           Correction factor to account for headers, containers,
-                        jitter. Default is 0.05. Increase if videos get too
-                        large.
+                        jitter. Must be between 0 and 0.3. Default is 0.01.
+                        Increase if videos get too large.
 ```
