@@ -31,20 +31,19 @@ import shlex
 
 FFMPEG_COMMANDS = {
     "get_duration": 'ffprobe -v quiet -of csv=p=0 -show_entries format=duration',
-    "vp8":          'ffmpeg -y -i @INVID@ -map 0:0 -map 0:1 @@SCALE@@ -c:v libvpx     -cpu-used 16 @@RATE@@ -threads @CPUS@ @@PASS@@ -f webm @OUTVID@',
-    "vp9":          'ffmpeg -y -i @INVID@ -map 0:0 -map 0:1 @@SCALE@@ -c:v libvpx-vp9 -cpu-used  8 @@RATE@@ -threads @CPUS@ @@PASS@@ -f webm @OUTVID@'
+    "ffmpeg_cmd":          'ffmpeg -y -i @INVID@ -map 0:0 -map 0:1 @@SCALE@@ @CODEC@ @@RATE@@ -threads @CPUS@ @AUDIO@ -f webm @OUTVID@'
 }
 
 FFMPEG_OPTIONS = {
     "scale": "-filter:v scale=-1:@SCALE@",
-    "rate_size": "-minrate @RATE@ -maxrate @RATE@ -b:v @RATE@",
+    "rate_size": "-b:v @RATE@",
     "rate_maxsize": "",
-    "rate_bitrate": "-minrate @RATE@ -maxrate @RATE@ -b:v @RATE@",
-    "pass_12": "-c:a libvorbis -minrate 64k -maxrate 64k -b:a 64k -ac 2",
-    "pass_12_noaudio": "-an",
-    "pass_1": "-an -pass 1",
-    "pass_2": "-c:a libvorbis -minrate 64k -maxrate 64k -b:a 64k -ac 2 -pass 2",
-    "pass_2_noaudio": "-an -pass 2",
+    "codec_vp9": "-c:v libvpx-vp9 -cpu-used 8 @PASS@",
+    "codec_vp8": "-c:v libvpx -cpu-used 16 @PASS@",
+    "rate_bitrate": "-b:v @RATE@",
+    "pass_vorbis": "-c:a libvorbis -b:a 64k -ac 2",
+    "pass_opus": "-c:a libopus -b:a 64k -ac 2",
+    "pass_noaudio": "-an",
 }
 
 
@@ -82,18 +81,39 @@ def encode(cmd):
         raise RuntimeError("Unable to encode the video")
 
 
-def get_encode_cmd(args):
-    if args.vpxversion == 9:
-        cmd = FFMPEG_COMMANDS["vp9"]
-    else:
-        cmd = FFMPEG_COMMANDS["vp8"]
+def get_encode_cmds(args):
+    cmds = []
+    if args.size:
+        if not args.onepass:
+            cmds.append(get_encode_cmd(args, 1))
+            cmds.append(get_encode_cmd(args, 2))
+            return cmds
+    cmds.append(get_encode_cmd(args))
+    return cmds
 
-    inpath = os.path.abspath(args.video).replace(" ", "\\ ")
-    print(inpath)
-    outpath = os.path.splitext(inpath)[0] + ".webm"
-    print(outpath)
-    cmd = cmd.replace("@INVID@", inpath)
-    cmd = cmd.replace("@OUTVID@", outpath)
+
+def get_input_file(args):
+    return os.path.abspath(args.video).replace(" ", "\\ ")
+
+
+def get_output_file(args):
+    return os.path.splitext(get_input_file(args))[0] + ".webm"
+
+
+def get_output_dir(args):
+    return os.path.dirname(os.path.abspath(get_input_file(args)))
+
+
+def get_encode_cmd(args, encode_pass=0):
+    cmd = FFMPEG_COMMANDS["ffmpeg_cmd"]
+
+    input_file = get_input_file(args)
+    output_file = get_output_file(args)
+
+    if args.vpxversion == 8:
+        cmd = cmd.replace("@CODEC@", FFMPEG_OPTIONS["codec_vp8"])
+    else:
+        cmd = cmd.replace("@CODEC@", FFMPEG_OPTIONS["codec_vp9"])
 
     cmd = cmd.replace("@CPUS@", "{!s}".format(multiprocessing.cpu_count()))
 
@@ -105,18 +125,31 @@ def get_encode_cmd(args):
 
     if args.size:
         cmd = cmd.replace("@@RATE@@", FFMPEG_OPTIONS["rate_size"])
-        if args.noaudio:
-            cmd = cmd.replace("@@PASS@@", FFMPEG_OPTIONS["pass_12_noaudio"])
-        else:
-            cmd = cmd.replace("@@PASS@@", FFMPEG_OPTIONS["pass_12"])
-        cmd = cmd.replace("@RATE@", "{!s}k".format(calc_rate(args, inpath)))
+        cmd = cmd.replace("@RATE@", "{!s}k".format(calc_rate(args, input_file)))
+    elif args.bitrate:
+        cmd = cmd.replace("@@RATE@@", FFMPEG_OPTIONS["rate_bitrate"])
+        cmd = cmd.replace("@RATE@", "{!s}k".format(args.bitrate))
     else:
         cmd = cmd.replace("@@RATE@@", "")
-        if args.noaudio:
-            cmd = cmd.replace("@@PASS@@", FFMPEG_OPTIONS["pass_12_noaudio"])
+
+    if args.noaudio or encode_pass == 1:
+        cmd = cmd.replace("@AUDIO@", FFMPEG_OPTIONS["pass_noaudio"])
+    else:
+        if args.vpxversion == 8:
+            cmd = cmd.replace("@AUDIO@", FFMPEG_OPTIONS["pass_vorbis"])
         else:
-            cmd = cmd.replace("@@PASS@@", FFMPEG_OPTIONS["pass_12"])
-        cmd = cmd.replace("@RATE@", "")
+            cmd = cmd.replace("@AUDIO@", FFMPEG_OPTIONS["pass_opus"])
+
+    if encode_pass == 0:
+        cmd = cmd.replace("@PASS@", "")
+    elif encode_pass == 1:
+        cmd = cmd.replace("@PASS@", "-pass 1")
+        output_file = "/dev/null"
+    else:
+        cmd = cmd.replace("@PASS@", "-pass 2")
+
+    cmd = cmd.replace("@INVID@", '{:s}'.format(input_file))
+    cmd = cmd.replace("@OUTVID@", '{:s}'.format(output_file))
 
     return cmd
 
@@ -127,24 +160,38 @@ def main():
     parser_group_size = parser.add_mutually_exclusive_group()
     parser_group_size.add_argument("-s", "--size", type=int, help="Target size of the new video in MB (approximate).")
     #parser_group_size.add_argument("-m", "--maxsize", type=int, help="Target size of the new video in MB (hard limit, 2 passes)")
-    #parser_group_size.add_argument("-b", "--bitrate", type=int, help="Target bitrate of the video (approximate).")
+    parser_group_size.add_argument("-b", "--bitrate", type=int, help="Target bitrate in k of the video (approximate). This implies --onepass.")
     #parser_group_size.add_argument("-c", "--crf", type=int, help="Target CRF of the video. 10 is default.")
 
     parser.add_argument("-r", "--resize", type=int, help="Resize video to this height. Aspect ratio will be kept.")
     parser.add_argument("-x", "--vpxversion", type=int, default="8", choices=[8, 9], help="8 for VP8 (default), or 9 for VP9.")
     parser.add_argument("-a", "--noaudio", action="store_true", help="Disable audio completely.")
+    parser.add_argument("-1", "--onepass", action="store_true", help="Disable two-pass encoding.")
+    parser.add_argument("-c", "--commandonly", action="store_true", help="Output ffmpeg commands only.")
     parser.add_argument("--cfac", type=float, default="0.05", help="Correction factor to account for headers, containers, jitter. Default is 0.05. Increase if videos get too large.")
 
     parser.add_argument("video", help="The video file to be converted.")
 
     args = parser.parse_args()
+
+    if args.bitrate:
+        args.onepass = True
+
     if not os.path.exists(args.video):
         print("File {} does not exist.".format(os.path.abspath(args.video)))
         sys.exit(1)
 
-    encode_cmd = get_encode_cmd(args)
-    print(encode_cmd)
-    encode(encode_cmd)
+    encode_cmds = get_encode_cmds(args)
+    for cmd in encode_cmds:
+        if not args.commandonly:
+            print("Running command: {:s}".format(cmd))
+            encode(cmd)
+        else:
+            print(cmd)
+    try:
+        os.remove(get_output_dir(args) + "/ffmpeg2pass-0.log")
+    except FileNotFoundError:
+        pass
 
     sys.exit(0)
 
