@@ -89,7 +89,7 @@ def get_encode_cmds(args):
 
 
 def get_input_file(args):
-    return os.path.abspath(args.video).replace(" ", "\\ ")
+    return os.path.abspath(args.video)
 
 
 def get_output_file(args):
@@ -103,8 +103,8 @@ def get_output_dir(args):
 def get_encode_cmd(args, encode_pass=0):
     cmd = FFMPEG_COMMANDS["ffmpeg_cmd"]
 
-    input_file = get_input_file(args)
-    output_file = get_output_file(args)
+    input_file = shlex.quote(get_input_file(args))
+    output_file = shlex.quote(get_output_file(args))
 
     if args.vpxversion == 8:
         cmd = cmd.replace("@CODEC@", FFMPEG_OPTIONS["codec_vp8"])
@@ -130,6 +130,8 @@ def get_encode_cmd(args, encode_pass=0):
 
     if args.noaudio or encode_pass == 1:
         cmd = cmd.replace("@AUDIO@", FFMPEG_OPTIONS["pass_noaudio"])
+        cmd = cmd.replace("-map 0:0", "")
+        cmd = cmd.replace("-map 0:1", "")
     else:
         if args.vpxversion == 8:
             cmd = cmd.replace("@AUDIO@", FFMPEG_OPTIONS["pass_vorbis"])
@@ -164,7 +166,7 @@ def main():
     parser.add_argument("-a", "--noaudio", action="store_true", help="Disable audio completely.")
     parser.add_argument("-1", "--onepass", action="store_true", help="Disable two-pass encoding.")
     parser.add_argument("-c", "--commandonly", action="store_true", help="Output ffmpeg commands only.")
-    parser.add_argument("--cfac", type=float, default="0.025", help="Correction factor to account for headers, containers, jitter. Must be between 0 and 0.3. Default is 0.025. Increase if videos get too large.")
+    parser.add_argument("--cfac", type=float, default="0.05", help="Correction factor to account for headers, containers, jitter. Must be between 0 and 0.3. Default is 0.05. Increase if videos get too large.")
 
     parser.add_argument("video", help="The video file to be converted.")
 
