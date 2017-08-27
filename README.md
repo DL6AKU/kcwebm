@@ -25,6 +25,22 @@ kcwebm.py -s 3 -a -x8 videofile
 
 will be fine for 4chan.
 
+# zshrc and bashrc
+
+You can add the function in zshrc.aliases.addon to your
+zshrc (or bashrc, untested) setup and then run kcwebmdl
+and it will download and convert your youtube video (the
+URL has to be in your CTRL+C clipboard) to the _WEBMDIR 
+directory. If you execute "kcwebmdl 480" for example 
+instead, it will convert that video to 480p. This also
+always uses the libvpx-vp9 (VP9) codec.
+
+Obviously you will have to edit _WEBMDIR to a directory
+to a directory that suits you.
+
+Also youtube-dl and xsel have to be installed.
+
+# Full help output
 
 Full ```--help``` output:
 

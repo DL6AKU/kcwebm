@@ -1,0 +1,21 @@
+kcwebmdl()
+{
+    _WEBMDIR="$HOME/Dokumente/BTSync/0LOL/webm/mine/"
+    if [ $# -eq 0 ]; then
+        _RES=720 # Default resolution is 720p
+    elif [ $# -eq 1 ]; then
+        _RES=$1
+    else
+        echo "FAILURE: Enter a resolution or nothing at all (defaults to 720)."
+        cd $OLDPWD
+        return
+    fi
+    builtin cd "$(mktemp -d)"
+    youtube-dl -i -c -f 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best' -o "%(title)s.%(ext)s" $(xsel -ob) 
+    kcwebm.py -s 10 -r $_RES -x9 *.mp4 && rm *.mp4
+    mv *.webm $_WEBMDIR
+    rm -rf .
+    cd $OLDPWD
+    return
+}
+
