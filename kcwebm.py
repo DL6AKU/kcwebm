@@ -106,6 +106,9 @@ def get_encode_cmd(args, encode_pass=0):
     input_file = shlex.quote(get_input_file(args))
     output_file = shlex.quote(get_output_file(args))
 
+    if output_file == input_file:
+        output_file = output_file.replace(".webm", ".kcwebm.webm")
+
     if args.vpxversion == 8:
         cmd = cmd.replace("@CODEC@", FFMPEG_OPTIONS["codec_vp8"])
     else:
