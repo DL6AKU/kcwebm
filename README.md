@@ -45,9 +45,7 @@ Also youtube-dl and xsel have to be installed.
 Full ```--help``` output:
 
 ```
-usage: kcwebm.py [-h] [-s SIZE | -b BITRATE] [-r RESIZE] [-x {8,9}] [-a] [-1]
-                 [-c] [--cfac CFAC]
-                 video
+usage: kcwebm.py [-h] [-s SIZE | -b BITRATE] [-r RESIZE] [-x {8,9}] [-a] [-1] [-c] [-f FRAMERATE] [--cfac CFAC] video
 
 positional arguments:
   video                 The video file to be converted.
@@ -56,17 +54,15 @@ optional arguments:
   -h, --help            show this help message and exit
   -s SIZE, --size SIZE  Target size of the new video in MB (approximate).
   -b BITRATE, --bitrate BITRATE
-                        Target bitrate in k of the video (approximate). This
-                        implies --onepass.
+                        Target bitrate in k of the video (approximate). This implies --onepass.
   -r RESIZE, --resize RESIZE
-                        Resize video to this height. Aspect ratio will be
-                        kept.
+                        Resize video to this height. Aspect ratio will be kept.
   -x {8,9}, --vpxversion {8,9}
                         8 for VP8 (default), or 9 for VP9.
   -a, --noaudio         Disable audio completely.
   -1, --onepass         Disable two-pass encoding.
   -c, --commandonly     Output ffmpeg commands only.
-  --cfac CFAC           Correction factor to account for headers, containers,
-                        jitter. Must be between 0 and 0.3. Default is 0.05.
-                        Increase if videos get too large.
+  -f FRAMERATE, --framerate FRAMERATE
+                        Specify framerate.
+  --cfac CFAC           Correction factor to account for headers, containers, jitter. Must be between 0 and 0.3. Default is 0.05. Increase if videos get too large.
 ```

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-Copyright (c) 2017 Bernd Lauert
+Copyright (c) 2017-2020 Bernd Lauert
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -31,18 +31,24 @@ import shlex
 
 FFMPEG_COMMANDS = {
     "get_duration": 'ffprobe -v quiet -of csv=p=0 -show_entries format=duration',
-    "ffmpeg_cmd":          'ffmpeg -y -i @INVID@ -map 0:0 -map 0:1 @@SCALE@@ @CODEC@ @@RATE@@ -threads @CPUS@ @AUDIO@ -f webm @OUTVID@'
+    "ffmpeg_cmd": 'ffmpeg -y -i @INVID@ -map 0:0 -map 0:1 @@SCALEORFRAMERATE@@ @@SCALE@@ @@FRAMERATE@@ @CODEC@ @@RATE@@ -threads @CPUS@ @AUDIO@ -f webm @OUTVID@'
 }
 
+AUDIO_BITRATE_VORBIS = 32
+AUDIO_BITRATE_OPUS = 32
+AUDIO_CHANNELS = 1
+
 FFMPEG_OPTIONS = {
-    "scale": "-filter:v scale=-1:@SCALE@",
-    "rate_size": "-b:v @RATE@",
+    "scale_or_framerate": "-filter:v",
+    "scale": "scale=-1:@SCALE@",
+    "framerate": "-framerate @FRAMERATE@",
+    "rate_size": "-b:v @RATE@ -maxrate @RATE@ -minrate @RATE@ -bufsize 500k",
     "rate_maxsize": "",
-    "codec_vp9": "-c:v libvpx-vp9 -cpu-used 8 @PASS@",
-    "codec_vp8": "-c:v libvpx -cpu-used 16 @PASS@",
-    "rate_bitrate": "-b:v @RATE@",
-    "pass_vorbis": "-c:a libvorbis -b:a 64k -ac 2",
-    "pass_opus": "-c:a libopus -b:a 64k -ac 2",
+    "codec_vp9": "-c:v libvpx-vp9 -cpu-used @CPUS@ @PASS@",
+    "codec_vp8": "-c:v libvpx -cpu-used @CPUS@ @PASS@",
+    "rate_bitrate": "-maxrate @RATE@ -minrate @RATE@ -b:v @RATE@ -bufsize 500k",
+    "pass_vorbis": "-c:a libvorbis -b:a {:d}k -ac {:d}".format(AUDIO_BITRATE_VORBIS, AUDIO_CHANNELS),
+    "pass_opus": "-c:a libopus -b:a {:d}k -ac {:d}".format(AUDIO_BITRATE_OPUS, AUDIO_CHANNELS),
     "pass_noaudio": "-an",
 }
 
@@ -60,8 +66,12 @@ def calc_rate(args, video):
 
     available_bits = args.size * 1024 * 1024 * 8
     available_bits -= available_bits * args.cfac
+    
+    if args.vpxversion == 8:
+        audio_bits = AUDIO_BITRATE_VORBIS * 1024 * length
+    else:
+        audio_bits = AUDIO_BITRATE_OPUS * 1024 * length
 
-    audio_bits = 64 * 1024 * length
     if args.noaudio:
         video_bits = available_bits
     else:
@@ -116,18 +126,29 @@ def get_encode_cmd(args, encode_pass=0):
 
     cmd = cmd.replace("@CPUS@", "{!s}".format(multiprocessing.cpu_count()))
 
-    if args.resize:
-        cmd = cmd.replace("@@SCALE@@", FFMPEG_OPTIONS["scale"])
-        cmd = cmd.replace("@SCALE@", str(args.resize))
+    if args.resize or args.framerate:
+        cmd = cmd.replace("@@SCALEORFRAMERATE@@", FFMPEG_OPTIONS["scale_or_framerate"])
+        if args.resize:
+            cmd = cmd.replace("@@SCALE@@", FFMPEG_OPTIONS["scale"])
+            cmd = cmd.replace("@SCALE@", str(args.resize))
+        else:
+            cmd = cmd.replace("@@SCALE@@", "")
     else:
+        cmd = cmd.replace("@@SCALEORFRAMERATE@@", "")
         cmd = cmd.replace("@@SCALE@@", "")
+
+    if args.framerate:
+        cmd = cmd.replace("@@FRAMERATE@@", FFMPEG_OPTIONS["framerate"])
+        cmd = cmd.replace("@FRAMERATE@", str(args.framerate))
+    else:
+        cmd = cmd.replace("@@FRAMERATE@@", "")
 
     if args.size:
         cmd = cmd.replace("@@RATE@@", FFMPEG_OPTIONS["rate_size"])
-        cmd = cmd.replace("@RATE@", "{!s}k".format(calc_rate(args, input_file)))
+        cmd = cmd.replace("@RATE@", "{!s}000".format(calc_rate(args, input_file)))
     elif args.bitrate:
         cmd = cmd.replace("@@RATE@@", FFMPEG_OPTIONS["rate_bitrate"])
-        cmd = cmd.replace("@RATE@", "{!s}k".format(args.bitrate))
+        cmd = cmd.replace("@RATE@", "{!s}000".format(args.bitrate))
     else:
         cmd = cmd.replace("@@RATE@@", "")
 
@@ -159,7 +180,7 @@ def main():
     parser = argparse.ArgumentParser()
 
     parser_group_size = parser.add_mutually_exclusive_group()
-    parser_group_size.add_argument("-s", "--size", type=int, help="Target size of the new video in MB (approximate).")
+    parser_group_size.add_argument("-s", "--size", type=float, help="Target size of the new video in MB (approximate).")
     #parser_group_size.add_argument("-m", "--maxsize", type=int, help="Target size of the new video in MB (hard limit, 2 passes)")
     parser_group_size.add_argument("-b", "--bitrate", type=int, help="Target bitrate in k of the video (approximate). This implies --onepass.")
     #parser_group_size.add_argument("-c", "--crf", type=int, help="Target CRF of the video. 10 is default.")
@@ -169,6 +190,7 @@ def main():
     parser.add_argument("-a", "--noaudio", action="store_true", help="Disable audio completely.")
     parser.add_argument("-1", "--onepass", action="store_true", help="Disable two-pass encoding.")
     parser.add_argument("-c", "--commandonly", action="store_true", help="Output ffmpeg commands only.")
+    parser.add_argument("-f", "--framerate", type=int, help="Specify framerate.")
     parser.add_argument("--cfac", type=float, default="0.05", help="Correction factor to account for headers, containers, jitter. Must be between 0 and 0.3. Default is 0.05. Increase if videos get too large.")
 
     parser.add_argument("video", help="The video file to be converted.")
